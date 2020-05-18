@@ -1,0 +1,4 @@
+#ignore some files
+/target/
+.DS_Store
+.o
