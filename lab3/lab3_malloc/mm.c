@@ -141,20 +141,27 @@ static void *coalesce(void *bp)
     }
     else
     {
-        
-        /* 待补全 */
-
+        /*
+        *   更新头部、脚部的 size
+        */
+        size += GET_SIZE(FTRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+        PUT(FTRP(NEXT_BLKP(bp)),PACK(size,0));
+        bp = PREV_BLKP(bp);
     }
     return bp;
 }
 
 static void *find_fit(size_t asize)
 {
+    void* bp = NEXT_BLKP(heap_listp);
+    for(;GET_SIZE(HDRP(bp)) && GET_ALLOC(HDRP(bp));bp = NEXT_BLKP(bp))
+    {
+        if(GET_ALLOC(HDRP(bp)) == 0 &&  GET_SIZE(HDRP(bp))  > asize )
+            return(bp);
+    }
 
-    /* 待补全 
-     * @return 第一个大小合适的空闲内存块堆栈地址
-     */
-
+    return(NULL);
 }
 static void place(void *bp, size_t asize)
 {
@@ -164,11 +171,24 @@ static void place(void *bp, size_t asize)
     if (rest >= MIN_BLK_SIZE) 
     /* need split */
     {
-        /* 待补全 */
+        PUT(HDRP(bp),PACK(asize,1));
+        PUT(FTRP(bp),PACK(asize,1));
+
+        /*
+        *   设置分割后另一个块. 另一个块的状态为 “未分配”
+        */
+        bp = NEXT_BLKP(bp);
+        PUT(HDRP(bp), PACK(rest, 0));
+        PUT(FTRP(bp), PACK(rest, 0));
+
     }
     else
     {
-        /* 待补全 */
+        /*
+        *   直接将整块都分配
+        */
+        PUT(HDRP(bp),PACK(total_size,1));
+        PUT(FTRP(bp),PACK(total_size,1));
     }
 }
 

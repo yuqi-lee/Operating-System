@@ -6,18 +6,16 @@ CC = gcc -g
 CFLAGS = -Wall
 
 # 待补充
-OBJS = xxxx.o
+OBJS = memlib.o mm.o mmdriver.o
 
 mmdriver: $(OBJS)
-# 待补充gcc命令（使用变量）
-	xxx
+	$(CC) $(CFLAGS) $(OBJS) -o mmdriver
 
-#待补充
-mmdriver.o: xxxx.h
-memlib.o: xxxx.h
-mm.o: xxxx.h
+mmdriver.o: memlib.h mm.h 
+memlib.o: memlib.h config.h 
+mm.o: mm.h memlib.h 
 
 clean:
-	rm -f *~ *.o mmdrive
+	rm -f *~ *.o mmdriver
 
 
