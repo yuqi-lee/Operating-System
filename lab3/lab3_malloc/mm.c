@@ -155,7 +155,7 @@ static void *coalesce(void *bp)
 static void *find_fit(size_t asize)
 {
     void* bp = NEXT_BLKP(heap_listp);
-    for(;GET_SIZE(HDRP(bp)) && GET_ALLOC(HDRP(bp));bp = NEXT_BLKP(bp))
+    for(;GET_SIZE(HDRP(bp)) || !GET_ALLOC(HDRP(bp));bp = NEXT_BLKP(bp))
     {
         if(GET_ALLOC(HDRP(bp)) == 0 &&  GET_SIZE(HDRP(bp))  > asize )
             return(bp);
