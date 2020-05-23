@@ -6,9 +6,9 @@ CC = gcc -g
 CFLAGS = -Wall
 
 OBJS1 = memlib.o mm.o mmdriver.o
-OBJS2 = ep_mm.o memlib.o epmmdriver.o
+OBJS2 = ep_mm.o memlib.o mmdriver.o
 
-all = mmdriver epmmdriver
+all : mmdriver epmmdriver
 
 mmdriver: $(OBJS1)
 	$(CC) $(CFLAGS)  -o mmdriver $(OBJS1)
@@ -23,6 +23,6 @@ ep_mm.o: mm.h memlib.h
 
 
 clean:
-	rm -f *~ *.o mmdriver
+	rm -f *~ *.o mmdriver epmmdriver
 
 
