@@ -163,6 +163,8 @@ static void *find_fit(size_t asize)
 
     return(NULL);
 }
+
+
 static void place(void *bp, size_t asize)
 {
     const size_t total_size = GET_SIZE(HDRP(bp));
