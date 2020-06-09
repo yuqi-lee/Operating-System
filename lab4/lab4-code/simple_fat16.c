@@ -300,6 +300,7 @@ int read_path(FAT16 *fat16_ins, const char *path, size_t size, off_t offset, cha
     int i, j;
     int malloc_size = (size + offset) > BYTES_PER_SECTOR ? (size + offset) : BYTES_PER_SECTOR;
     BYTE *sector_buffer = malloc(malloc_size * sizeof(BYTE));
+    
     /*  文件对应目录项，簇号，簇对应FAT表项的内容，簇的第一个扇区号  */
     DIR_ENTRY Dir;
     WORD ClusterN, FatClusEntryVal, FirstSectorofCluster;
