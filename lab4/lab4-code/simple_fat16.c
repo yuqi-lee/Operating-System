@@ -13,7 +13,7 @@
 #include "bench.h"
 char *FAT_FILE_NAME = "fat16.img";
 
-/* 将扇区号为secnum的扇区读到buffer中 */ 
+/* 将扇区号为secnum的扇区读到buffer中 */
 
 void sector_read(FILE *fd, unsigned int secnum, void *buffer)
 {
@@ -39,11 +39,19 @@ char **path_split(char *pathInput, int *pathDepth_ret)
     int i = 0;
     int pathDepth = 0;
 
+    for (; pathInput[i] != '\n'; i++)
+    {
+        if (pathInput[i] == '/')
+            pathDepth++;
+    }
+    *pathDepth_ret = pathDepth;
     char **paths = malloc(pathDepth * sizeof(char *));
-
+    for (i = 0; i < pathDepth; i++)
+    {
+        path[i] = malloc(11 * sizeof(char));
+    }
 
     return paths;
-
 }
 
 /** 
@@ -90,12 +98,12 @@ BYTE *path_decode(BYTE *path)
     return pathDecoded;
 }
 
-
 FAT16 *pre_init_fat16(void)
 {
-    /* Opening the FAT16 image file */ 
+    /* Opening the FAT16 image file */
     FILE *fd;
     FAT16 *fat16_ins;
+    BYTE buffer[BYTES_PER_SECTOR];
 
     fd = fopen(FAT_FILE_NAME, "rb");
 
@@ -107,8 +115,8 @@ FAT16 *pre_init_fat16(void)
 
     fat16_ins = malloc(sizeof(FAT16));
     fat16_ins->fd = fd;
-    
-   /** TODO: 
+
+    /** TODO: 
     * 初始化fat16_ins的其余成员变量, 该struct定义在fat16.c的第65行
     * 其余成员变量如下:
     *  FirstRootDirSecNum->第一个根目录的扇区偏移.
@@ -118,6 +126,43 @@ FAT16 *pre_init_fat16(void)
     * Hint2: 可以使用BPB中的参数完成其他变量的初始化, 该struct定义在fat16.c的第23行
     * Hint3: root directory的大小与Bpb.BPB_RootEntCnt有关，并且是扇区对齐的
     **/
+
+    sector_read(fd, 0, buffer);
+
+/*
+    memcpy(&fat16->Bpb.BS_jmpBoot, buffer, 3);
+    memcpy(&fat16->Bpb.BS_OEMName, buffer + 3, 8);
+    memcpy(&fat16_ins->Bpb.BPB_BytsPerSec, buffer + 11, 2);
+    memcpy(&fat16_ins->Bpb.BPB_SecPerClus, buffer + 13, 1);
+    memcpy(&fat16_ins->Bpb.BPB_RsvdSecCnt, buffer + 14, 2);
+    memcpy(&fat16_ins->Bpb.BPB_NumFATS, buffer + 16, 1);
+    memcpy(&fat16_ins->Bpb.BPB_RootEntCnt, buffer + 17, 2);
+    memcpy(&fat16_ins->Bpb.BPB_TotSec16, buffer + 19, 2);
+    memcpy(&fat16_ins->Bpb.BPB_Media, buffer + 21, 1);
+    memcpy(&fat16_ins->Bpb.BPB_FATSz16, buffer + 22, 2);
+    memcpy(&fat16_ins->Bpb.BPB_SecPerTrk, buffer + 24, 2);
+    memcpy(&fat16_ins->Bpb.BPB_NumHeads, buffer + 26, 2);
+    memcpy(&fat16_ins->Bpb.BPB_HiddSec, buffer + 28, 4);
+    memcpy(&fat16_ins->Bpb.BPB_TotSec32, buffer + 32, 4);
+    memcpy(&fat16_ins->Bpb.BS_DrvNum, buffer + 0x24, 1);
+    memcpy(&fat16_ins->Bpb.BS_Reserved1, buffer + 0x25, 1);
+    memcpy(&fat16_ins->Bpb.BS_BootSig, buffer + 0x26, 1);
+    memcpy(&fat16_ins->Bpb.BS_VollID, buffer + 0x27, 4);
+    memcpy(fat16_ins->Bpb.BS_VollLab, buffer + 0x2b, 11);
+    memcpy(fat16_ins->Bpb.BS_FilSysType, buffer + 0x36, 8);
+    memcpy(fat16_ins->Bpb.Reserved2, buffer + 0x3e, 448);
+    memcpy(&fat16_ins->Bpb.Signature_word, buffer + 0x01fe, 2);
+
+*/
+
+    memcpy(&fat16->Bpb, buffer, 512);
+
+
+    /* 根目录偏移 = FAT1 的偏移 + 所有 FAT 表的长度 */
+    fat16_ins->FirstRootDirSecNum =  fat16_ins->Bpb.BPB_RsvdSecCnt + fat16_ins->Bpb.BPB_NumFATS * fat16_ins->Bpb.BPB_FATSz16;
+
+    /* 数据区偏移：在根目录的基础上进行计算 */
+    fat16_ins->FirstDataSector = fat16_ins->FirstRootDirSecNum + fat16_ins->Bpb.BPB_RootEntCnt * 32 / fat16_ins->Bpb.BPB_BytsPerSec ;
 
 
     return fat16_ins;
@@ -129,11 +174,16 @@ FAT16 *pre_init_fat16(void)
 WORD fat_entry_by_cluster(FAT16 *fat16_ins, WORD ClusterN)
 {
     BYTE sector_buffer[BYTES_PER_SECTOR];
+    WORD FAToffset,SECoffset;
 
+    
 
 
     return 0xffff;
 }
+
+
+
 
 /**
  * 根据簇号ClusterN，获取其对应的第一个扇区的扇区号和数据，以及对应的FAT表项
@@ -159,7 +209,7 @@ int find_root(FAT16 *fat16_ins, DIR_ENTRY *Root, const char *path)
 
     /* 先读取root directory */
     int i, j;
-    int RootDirCnt = 1;   /* 用于统计已读取的扇区数 */
+    int RootDirCnt = 1; /* 用于统计已读取的扇区数 */
     int is_eq;
     BYTE buffer[BYTES_PER_SECTOR];
 
@@ -213,7 +263,6 @@ int find_root(FAT16 *fat16_ins, DIR_ENTRY *Root, const char *path)
             sector_read(fat16_ins->fd, fat16_ins->FirstRootDirSecNum + RootDirCnt, buffer);
             RootDirCnt++;
         }
-
     }
 
     return 1;
@@ -230,17 +279,10 @@ int find_root(FAT16 *fat16_ins, DIR_ENTRY *Root, const char *path)
 int find_subdir(FAT16 *fat16_ins, DIR_ENTRY *Dir, char **paths, int pathDepth, int curDepth)
 {
     int i, j;
-    int DirSecCnt = 1;  /* 用于统计已读取的扇区数 */
+    int DirSecCnt = 1; /* 用于统计已读取的扇区数 */
     BYTE buffer[BYTES_PER_SECTOR];
 
     WORD ClusterN, FatClusEntryVal, FirstSectorofCluster;
-
-
-
-
-
-
-
 
     return 1;
 }
@@ -253,24 +295,17 @@ int find_subdir(FAT16 *fat16_ins, DIR_ENTRY *Dir, char **paths, int pathDepth, i
  * 所以实现正确时的效果为实验文档中的测试二中可以正常访问文件
 **/
 
-int read_path(FAT16* fat16_ins, const char *path, size_t size, off_t offset, char *buffer)
+int read_path(FAT16 *fat16_ins, const char *path, size_t size, off_t offset, char *buffer)
 {
-  int i, j;
-  int malloc_size = (size + offset) > BYTES_PER_SECTOR ? (size + offset) : BYTES_PER_SECTOR;
-  BYTE *sector_buffer = malloc(malloc_size * sizeof(BYTE));
-  /*  文件对应目录项，簇号，簇对应FAT表项的内容，簇的第一个扇区号  */
-  DIR_ENTRY Dir;
-  WORD ClusterN, FatClusEntryVal, FirstSectorofCluster;
-  
+    int i, j;
+    int malloc_size = (size + offset) > BYTES_PER_SECTOR ? (size + offset) : BYTES_PER_SECTOR;
+    BYTE *sector_buffer = malloc(malloc_size * sizeof(BYTE));
+    /*  文件对应目录项，簇号，簇对应FAT表项的内容，簇的第一个扇区号  */
+    DIR_ENTRY Dir;
+    WORD ClusterN, FatClusEntryVal, FirstSectorofCluster;
 
-
-
-
-
-
-  return 0;
+    return 0;
 }
-
 
 /**
  * ------------------------------------------------------------------------------
@@ -353,7 +388,7 @@ int fat16_getattr(const char *path, struct stat *stbuf)
 }
 
 int fat16_readdir(const char *path, void *buffer, fuse_fill_dir_t filler,
-        off_t offset, struct fuse_file_info *fi)
+                  off_t offset, struct fuse_file_info *fi)
 {
     FAT16 *fat16_ins;
     BYTE sector_buffer[BYTES_PER_SECTOR];
@@ -461,10 +496,9 @@ int fat16_readdir(const char *path, void *buffer, fuse_fill_dir_t filler,
     return 0;
 }
 
-
 /* 读文件接口，直接调用read_path实现 */
 int fat16_read(const char *path, char *buffer, size_t size, off_t offset,
-        struct fuse_file_info *fi)
+               struct fuse_file_info *fi)
 {
     FAT16 *fat16_ins;
     struct fuse_context *context;
@@ -475,7 +509,8 @@ int fat16_read(const char *path, char *buffer, size_t size, off_t offset,
 }
 
 /* read_path()调试思路参考，不作为计分标准 */
-void test_read_path() {
+void test_read_path()
+{
     char *buffer;
     /* 这里使用的文件镜像是fat16_test.img */
     FAT_FILE_NAME = "fat16_test.img";
@@ -488,16 +523,17 @@ void test_read_path() {
     char texts[][32] = {"(shell pkg-config fuse --cflags)", "<errno.h>", "<errno.h>"};
 
     int i;
-    for (i = 0; i < sizeof(path) / sizeof(path[0]); i++) {
+    for (i = 0; i < sizeof(path) / sizeof(path[0]); i++)
+    {
         DIR_ENTRY Dir;
-        buffer = malloc(size[i]*sizeof(char));
+        buffer = malloc(size[i] * sizeof(char));
         /* 读文件 */
         read_path(fat16_ins, path[i], size[i], offset[i], buffer);
         /* 比较读出的结果 */
         assert(strncmp(buffer, texts[i], size[i]) == 0);
         free(buffer);
         printf("test case %d: OK\n", i + 1);
-    }   
+    }
 
     fclose(fat16_ins->fd);
     free(fat16_ins);
@@ -508,22 +544,22 @@ struct fuse_operations fat16_oper = {
     .destroy = fat16_destroy,
     .getattr = fat16_getattr,
     .readdir = fat16_readdir,
-    .read = fat16_read
-};
+    .read = fat16_read};
 
 int main(int argc, char *argv[])
 {
     int ret;
 
-    if (strcmp(argv[1], "--debug") == 0) {
+    if (strcmp(argv[1], "--debug") == 0)
+    {
         // 将你自己的Debug用的语句写在这里.
         // 通过 ./simple_fat16 --debug 执行这里的语句.
-        
-        
+
         return 0;
     }
 
-    if (strcmp(argv[1], "--test") == 0) {
+    if (strcmp(argv[1], "--test") == 0)
+    {
         printf("--------------\nrunning test\n--------------\n");
         FAT_FILE_NAME = "fat16_test.img";
         test_path_split();
