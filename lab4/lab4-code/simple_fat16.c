@@ -181,7 +181,7 @@ FAT16 *pre_init_fat16(void)
 
     sector_read(fd, 0, buffer);
 
-    /*
+   
     memcpy(&fat16->Bpb.BS_jmpBoot, buffer, 3);
     memcpy(&fat16->Bpb.BS_OEMName, buffer + 3, 8);
     memcpy(&fat16_ins->Bpb.BPB_BytsPerSec, buffer + 11, 2);
@@ -205,9 +205,7 @@ FAT16 *pre_init_fat16(void)
     memcpy(fat16_ins->Bpb.Reserved2, buffer + 0x3e, 448);
     memcpy(&fat16_ins->Bpb.Signature_word, buffer + 0x01fe, 2);
 
-*/
-
-    memcpy(&fat16->Bpb, buffer, 512);
+    
 
     /* 根目录偏移 = FAT1 的偏移 + 所有 FAT 表的长度 */
     fat16_ins->FirstRootDirSecNum = fat16_ins->Bpb.BPB_RsvdSecCnt + fat16_ins->Bpb.BPB_NumFATS * fat16_ins->Bpb.BPB_FATSz16;
@@ -432,7 +430,7 @@ int read_path(FAT16 *fat16_ins, const char *path, size_t size, off_t offset, cha
     memcpy(buffer, sector_buffer + offset, size);
     free(sector_buffer);
 
-    
+
     return size;
 
 }
