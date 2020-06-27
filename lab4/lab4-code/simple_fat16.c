@@ -13,12 +13,12 @@
 #include "bench.h"
 char *FAT_FILE_NAME = "fat16.img";
 
-/* 将扇区号为secnum的扇区读到buffer中 */
+/* 将扇区号为secnum的扇区读到pathInput中 */
 
-void sector_read(FILE *fd, unsigned int secnum, void *buffer)
+void sector_read(FILE *fd, unsigned int secnum, void *pathInput)
 {
     fseek(fd, BYTES_PER_SECTOR * secnum, SEEK_SET);
-    fread(buffer, BYTES_PER_SECTOR, 1, fd);
+    fread(pathInput, BYTES_PER_SECTOR, 1, fd);
 }
 
 /** TODO:
@@ -36,73 +36,67 @@ void sector_read(FILE *fd, unsigned int secnum, void *buffer)
 
 char **path_split(char *pathInput, int *pathDepth_ret)
 {
-    int i = 0;
-    int pathDepth = 0;
-    int cur_Depth = 0;
+    int i = 0, j = 0, k = 0;
+    int pathDepth = 0, pathLenth = 0;
+    pathLenth = strlen(pathInput);
 
-    for (; pathInput[i] != '\0'; i++)
+    for (i = 0; i < pathLenth; i++)
     {
-        if (pathInput[i] == '/')
+        if(pathInput[i] == '/')
             pathDepth++;
     }
-    *pathDepth_ret = pathDepth;
+        
     char **paths = malloc(pathDepth * sizeof(char *));
 
-    for (i = 0; i < pathDepth; i++)
+    for(i = 0;i < pathDepth;i++)
     {
-        path[i] = malloc(11 * sizeof(char));
+        paths[i] = malloc(11 * sizeof(char));
     }
 
-    int k = 0; /* k 用于记录当前目录/文件名的长度 */
+    int isExtension = 0; //用于记录是否为扩展名
 
-    if (strcmp(pathInput, "/.") == 0)
-    {
-        strcmp(paths[0], ".          ");
-        return(paths);
-    }
-
-    else if (strcmp(pathInput, "/..") == 0)
-    {
-        strcmp(paths[0], "..         ");
-        return(paths);
-    }
-
-    for (i = 1; pathInput[i] != '\0'; i++)
+    for (i = 0, j = 0; i < pathLenth; i++)
     {
 
         if (pathInput[i] == '/')
         {
-            while (k < 11)
-            {
-                paths[cur_Depth][k] = ' ';
-                k++;
-            }
-            cur_Depth++;
+            strcpy(paths[j], "           ");
             k = 0;
+            isExtension = 0;
+            if (pathInput[i + 1] == '.' && pathInput[i + 2] == '.' && (pathInput[i + 3] == '/' || i + 3 >= pathLenth))
+            {
+                // "/../././../."
+                paths[j][0] = '.';
+                paths[j][1] = '.';
+                i += 2;
+            }
+            else if (pathInput[i + 1] == '.' && (pathInput[i + 2] == '/' || i + 2 >= pathLenth))
+            {
+                paths[j][0] = '.';
+                i += 1;
+            }
+            j++;
+            continue;
         }
 
-        else if (pathInput[i] == '.')
+        if (pathInput[i] == '.')
         {
-            while (k < 11)
-            {
-                paths[cur_Depth][k] = ' ';
-                k++;
-            }
+            k = 8;
+            isExtension = 1;
+            continue;
         }
-
-        else
+        if ((k < 11 && isExtension == 1) || (k < 8 && isExtension == 0))
         {
-            if (k < 11) /* 大于 11 后，直接截断。FAT16 不支持长文件名 */
-            {
-                if (pathInput[i] >= 'a' && pathInput[i] <= 'z') /* 英文字母统一按大写存储 */
-                    paths[cur_Depth][k] = pathInput[i] - 32;
-                else
-                    paths[cur_Depth][k] = pathInput[i];
-            }
+            if(pathInput[i] >= 'a' && pathInput[i] <= 'z')
+                paths[j - 1][k] = pathInput[i] - 'a' + 'A';
+            else
+                 paths[j - 1][k] = pathInput[i];
             k++;
         }
+           
     }
 
+    *pathDepth_ret = pathDepth;
     return paths;
 }
 
@@ -155,7 +149,7 @@ FAT16 *pre_init_fat16(void)
     /* Opening the FAT16 image file */
     FILE *fd;
     FAT16 *fat16_ins;
-    BYTE buffer[BYTES_PER_SECTOR];
+    BYTE pathInput[BYTES_PER_SECTOR];
 
     fd = fopen(FAT_FILE_NAME, "rb");
 
@@ -179,39 +173,36 @@ FAT16 *pre_init_fat16(void)
     * Hint3: root directory的大小与Bpb.BPB_RootEntCnt有关，并且是扇区对齐的
     **/
 
-    sector_read(fd, 0, buffer);
+    sector_read(fd, 0, pathInput);
 
-   
-    memcpy(&fat16->Bpb.BS_jmpBoot, buffer, 3);
-    memcpy(&fat16->Bpb.BS_OEMName, buffer + 3, 8);
-    memcpy(&fat16_ins->Bpb.BPB_BytsPerSec, buffer + 11, 2);
-    memcpy(&fat16_ins->Bpb.BPB_SecPerClus, buffer + 13, 1);
-    memcpy(&fat16_ins->Bpb.BPB_RsvdSecCnt, buffer + 14, 2);
-    memcpy(&fat16_ins->Bpb.BPB_NumFATS, buffer + 16, 1);
-    memcpy(&fat16_ins->Bpb.BPB_RootEntCnt, buffer + 17, 2);
-    memcpy(&fat16_ins->Bpb.BPB_TotSec16, buffer + 19, 2);
-    memcpy(&fat16_ins->Bpb.BPB_Media, buffer + 21, 1);
-    memcpy(&fat16_ins->Bpb.BPB_FATSz16, buffer + 22, 2);
-    memcpy(&fat16_ins->Bpb.BPB_SecPerTrk, buffer + 24, 2);
-    memcpy(&fat16_ins->Bpb.BPB_NumHeads, buffer + 26, 2);
-    memcpy(&fat16_ins->Bpb.BPB_HiddSec, buffer + 28, 4);
-    memcpy(&fat16_ins->Bpb.BPB_TotSec32, buffer + 32, 4);
-    memcpy(&fat16_ins->Bpb.BS_DrvNum, buffer + 0x24, 1);
-    memcpy(&fat16_ins->Bpb.BS_Reserved1, buffer + 0x25, 1);
-    memcpy(&fat16_ins->Bpb.BS_BootSig, buffer + 0x26, 1);
-    memcpy(&fat16_ins->Bpb.BS_VollID, buffer + 0x27, 4);
-    memcpy(fat16_ins->Bpb.BS_VollLab, buffer + 0x2b, 11);
-    memcpy(fat16_ins->Bpb.BS_FilSysType, buffer + 0x36, 8);
-    memcpy(fat16_ins->Bpb.Reserved2, buffer + 0x3e, 448);
-    memcpy(&fat16_ins->Bpb.Signature_word, buffer + 0x01fe, 2);
-
-    
+    memcpy(&fat16_ins->Bpb.BS_jmpBoot, pathInput, 3);
+    memcpy(&fat16_ins->Bpb.BS_OEMName, pathInput + 3, 8);
+    memcpy(&fat16_ins->Bpb.BPB_BytsPerSec, pathInput + 11, 2);
+    memcpy(&fat16_ins->Bpb.BPB_SecPerClus, pathInput + 13, 1);
+    memcpy(&fat16_ins->Bpb.BPB_RsvdSecCnt, pathInput + 14, 2);
+    memcpy(&fat16_ins->Bpb.BPB_NumFATS, pathInput + 16, 1);
+    memcpy(&fat16_ins->Bpb.BPB_RootEntCnt, pathInput + 17, 2);
+    memcpy(&fat16_ins->Bpb.BPB_TotSec16, pathInput + 19, 2);
+    memcpy(&fat16_ins->Bpb.BPB_Media, pathInput + 21, 1);
+    memcpy(&fat16_ins->Bpb.BPB_FATSz16, pathInput + 22, 2);
+    memcpy(&fat16_ins->Bpb.BPB_SecPerTrk, pathInput + 24, 2);
+    memcpy(&fat16_ins->Bpb.BPB_NumHeads, pathInput + 26, 2);
+    memcpy(&fat16_ins->Bpb.BPB_HiddSec, pathInput + 28, 4);
+    memcpy(&fat16_ins->Bpb.BPB_TotSec32, pathInput + 32, 4);
+    memcpy(&fat16_ins->Bpb.BS_DrvNum, pathInput + 36, 1);
+    memcpy(&fat16_ins->Bpb.BS_Reserved1, pathInput + 37, 1);
+    memcpy(&fat16_ins->Bpb.BS_BootSig, pathInput + 38, 1);
+    memcpy(&fat16_ins->Bpb.BS_VollID, pathInput + 39, 4);
+    memcpy(fat16_ins->Bpb.BS_VollLab, pathInput + 43, 11);
+    memcpy(fat16_ins->Bpb.BS_FilSysType, pathInput + 54, 8);
+    memcpy(fat16_ins->Bpb.Reserved2, pathInput + 62, 448);
+    memcpy(&fat16_ins->Bpb.Signature_word, pathInput + 510, 2);
 
     /* 根目录偏移 = FAT1 的偏移 + 所有 FAT 表的长度 */
     fat16_ins->FirstRootDirSecNum = fat16_ins->Bpb.BPB_RsvdSecCnt + fat16_ins->Bpb.BPB_NumFATS * fat16_ins->Bpb.BPB_FATSz16;
 
     /* 数据区偏移：在根目录的基础上进行计算 */
-    fat16_ins->FirstDataSector = fat16_ins->FirstRootDirSecNum + fat16_ins->Bpb.BPB_RootEntCnt * 32 / fat16_ins->Bpb.BPB_BytsPerSec;
+    fat16_ins->FirstDataSector = fat16_ins->FirstRootDirSecNum + fat16_ins->Bpb.BPB_RootEntCnt * BYTES_PER_DIR / fat16_ins->Bpb.BPB_BytsPerSec;
 
     return fat16_ins;
 }
@@ -221,30 +212,30 @@ FAT16 *pre_init_fat16(void)
  **/
 WORD fat_entry_by_cluster(FAT16 *fat16_ins, WORD ClusterN)
 {
-    BYTE sector_buffer[BYTES_PER_SECTOR];
+    BYTE sector_pathInput[BYTES_PER_SECTOR];
     WORD offset_by_byte, SEC_offset;
     WORD Sec_Num, FatClusEntryVal;
 
-    offset_by_byte = 2 * ClusterN;
+    offset_by_byte = 2 * (ClusterN - 2) + 4; //计算要找的 FAT 项在 FAT 表中偏移了多少字节
 
     Sec_Num = offset_by_byte / fat16_ins->Bpb.BPB_BytsPerSec;
     SEC_offset = offset_by_byte % fat16_ins->Bpb.BPB_BytsPerSec;
 
-    sector_read(fat16_ins->fd, fat16_ins->Bpb.BPB_RsvdSecCnt + Sec_Num, sector_buffer);
+    sector_read(fat16_ins->fd, fat16_ins->Bpb.BPB_RsvdSecCnt + Sec_Num, sector_pathInput);
 
-    FatClusEntryVal = *((WORD*)&sector_buffer[SEC_offset];
-    return 0xffff;
+    FatClusEntryVal = *((WORD*)&sector_pathInput[SEC_offset]);
+    return FatClusEntryVal;
 }
 
 /**
  * 根据簇号ClusterN，获取其对应的第一个扇区的扇区号和数据，以及对应的FAT表项
  **/
-void first_sector_by_cluster(FAT16 *fat16_ins, WORD ClusterN, WORD *FatClusEntryVal, WORD *FirstSectorofCluster, BYTE *buffer)
+void first_sector_by_cluster(FAT16 *fat16_ins, WORD ClusterN, WORD *FatClusEntryVal, WORD *FirstSectorofCluster, BYTE *pathInput)
 {
     *FatClusEntryVal = fat_entry_by_cluster(fat16_ins, ClusterN);
     *FirstSectorofCluster = ((ClusterN - 2) * fat16_ins->Bpb.BPB_SecPerClus) + fat16_ins->FirstDataSector;
 
-    sector_read(fat16_ins->fd, *FirstSectorofCluster, buffer);
+    sector_read(fat16_ins->fd, *FirstSectorofCluster, pathInput);
 }
 
 /**
@@ -262,9 +253,9 @@ int find_root(FAT16 *fat16_ins, DIR_ENTRY *Root, const char *path)
     int i, j;
     int RootDirCnt = 1; /* 用于统计已读取的扇区数 */
     int is_eq;
-    BYTE buffer[BYTES_PER_SECTOR];
+    BYTE pathInput[BYTES_PER_SECTOR];
 
-    sector_read(fat16_ins->fd, fat16_ins->FirstRootDirSecNum, buffer);
+    sector_read(fat16_ins->fd, fat16_ins->FirstRootDirSecNum, pathInput);
 
     /** 
      * 查找名字为paths[0]的目录项，
@@ -274,7 +265,7 @@ int find_root(FAT16 *fat16_ins, DIR_ENTRY *Root, const char *path)
      **/
     for (i = 1; i <= fat16_ins->Bpb.BPB_RootEntCnt; i++)
     {
-        memcpy(Root, &buffer[((i - 1) * BYTES_PER_DIR) % BYTES_PER_SECTOR], BYTES_PER_DIR);
+        memcpy(Root, &pathInput[((i - 1) * BYTES_PER_DIR) % BYTES_PER_SECTOR], BYTES_PER_DIR);
 
         /* If the directory entry is free, all the next directory entries are also
          * free. So this file/directory could not be found */
@@ -311,7 +302,7 @@ int find_root(FAT16 *fat16_ins, DIR_ENTRY *Root, const char *path)
          * Read next sector */
         if (i % 16 == 0 && i != fat16_ins->Bpb.BPB_RootEntCnt)
         {
-            sector_read(fat16_ins->fd, fat16_ins->FirstRootDirSecNum + RootDirCnt, buffer);
+            sector_read(fat16_ins->fd, fat16_ins->FirstRootDirSecNum + RootDirCnt, pathInput);
             RootDirCnt++;
         }
     }
@@ -331,46 +322,48 @@ int find_subdir(FAT16 *fat16_ins, DIR_ENTRY *Dir, char **paths, int pathDepth, i
 {
     int i, j;
     int DirSecCnt = 1; /* 用于统计已读取的扇区数 */
-    BYTE buffer[BYTES_PER_SECTOR];
+    BYTE pathInput[BYTES_PER_SECTOR];
 
     WORD ClusterN, FatClusEntryVal, FirstSectorofCluster;
 
     int Dir_per_sec = fat16_ins->Bpb.BPB_BytsPerSec / BYTES_PER_DIR;
-    first_sector_by_cluster(fat16_ins, Dir->DIR_FstClusLO, &FatClusEntryVal, &FirstSectorofCluster, buffer);
+    first_sector_by_cluster(fat16_ins, Dir->DIR_FstClusLO, &FatClusEntryVal, &FirstSectorofCluster, pathInput);
 
     i = 0;
-
     while(true)
     {
-        if(i % Dir_per_sec == 0 && i !=0 )
-        {
-            DirSecCnt++;
-            sector_read(fat16_ins->fd, FirstSectorofCluster + (DirSecCnt - 1) % fat16_ins->Bpb.BPB_SecPerClus, buffer);
-
-        }
-
         if(i % (Dir_per_sec * fat16_ins->Bpb.BPB_SecPerClus) == 0 && i != 0)
         {
             DirSecCnt = 1;
             ClusterN = FatClusEntryVal;
-            first_sector_by_cluster(fat16_ins, ClusterN, &FatClusEntryVal, &FirstSectorofCluster, buffer);
+            first_sector_by_cluster(fat16_ins, ClusterN, &FatClusEntryVal, &FirstSectorofCluster, pathInput);
         }
+
+
+        else if(i % Dir_per_sec == 0 && i !=0 )
+        {
+            DirSecCnt++;
+            sector_read(fat16_ins->fd, FirstSectorofCluster + (DirSecCnt - 1) % fat16_ins->Bpb.BPB_SecPerClus, pathInput);
+        }
+
+        
+        memcpy(Dir, pathInput + i % Dir_per_sec * BYTES_PER_DIR, BYTES_PER_DIR);
 
         if(FatClusEntryVal == 0x00)
         {
             break;
         }  
 
-        if(strncmp(paths[curDepth],  buffer + i % Dir_per_sec * BYTES_PER_DIR, 11) == 0)
+        if(strncmp(paths[curDepth],  Dir->DIR_Name, 11) == 0)
         {
-            memcpy(Dir, buffer + i % Dir_per_sec * BYTES_PER_DIR, BYTES_PER_DIR);
-            if(curDepth = pathDepth - 1)
+            
+            if(curDepth == pathDepth - 1)
             {
                 return 0;
             }
             else
             {
-                return(find_subdir(fat16_ins, Dir, paths, pathDepth, curDepth + 1);)
+                return(find_subdir(fat16_ins, Dir, paths, pathDepth, curDepth + 1));
             }
         }
 
@@ -390,18 +383,18 @@ int find_subdir(FAT16 *fat16_ins, DIR_ENTRY *Dir, char **paths, int pathDepth, i
 
 
 /** TODO:
- * 从path对应的文件(一定不为根目录"/")的offset字节处开始读取size字节的数据到buffer中，并返回实际读取的字节数
+ * 从path对应的文件(一定不为根目录"/")的offset字节处开始读取size字节的数据到pathInput中，并返回实际读取的字节数
  * Hint: 以扇区为单位读入，需要考虑读到当前簇结尾时切换到下一个簇，并更新要读的扇区号等信息
  * Hint: 文件大小属性是Dir.DIR_FileSize；当offset超过文件大小时，应该返回0
  * 此函数会作为读文件的函数实现被fuse文件系统使用，见fat16_read函数
  * 所以实现正确时的效果为实验文档中的测试二中可以正常访问文件
 **/
 
-int read_path(FAT16 *fat16_ins, const char *path, size_t size, off_t offset, char *buffer)
+int read_path(FAT16 *fat16_ins, const char *path, size_t size, off_t offset, char *pathInput)
 {
-    int i, j;
+    long long i, j;
     int malloc_size = (size + offset) > BYTES_PER_SECTOR ? (size + offset) : BYTES_PER_SECTOR;
-    BYTE *sector_buffer = malloc(malloc_size * sizeof(BYTE));
+    BYTE *sector_pathInput = malloc(malloc_size * sizeof(BYTE));
 
     /*  文件对应目录项，簇号，簇对应FAT表项的内容，簇的第一个扇区号  */
     DIR_ENTRY Dir;
@@ -413,26 +406,23 @@ int read_path(FAT16 *fat16_ins, const char *path, size_t size, off_t offset, cha
     }
 
     ClusterN = Dir.DIR_FstClusLO;
-    first_sector_by_cluster(fat16_ins, ClusterN, &FatClusEntryVal, &FirstSectorofCluster, buffer);
+    first_sector_by_cluster(fat16_ins, ClusterN, &FatClusEntryVal, &FirstSectorofCluster, pathInput);
 
     for (i = 0, j = 0; i < size + offset; i += BYTES_PER_SECTOR, j++)
     {
-        sector_read(fat16_ins->fd, FirstSectorofCluster + j, sector_buffer + i);
+        sector_read(fat16_ins->fd, FirstSectorofCluster + j, sector_pathInput + i);
         if ((j + 1) % fat16_ins->Bpb.BPB_SecPerClus == 0)
         {
             ClusterN = FatClusEntryVal;
-            first_sector_by_cluster(fat16_ins, ClusterN, &FatClusEntryVal, &FirstSectorofCluster, buffer);
+            first_sector_by_cluster(fat16_ins, ClusterN, &FatClusEntryVal, &FirstSectorofCluster, pathInput);
             j = -1;
         }
     }
 
-
-    memcpy(buffer, sector_buffer + offset, size);
-    free(sector_buffer);
-
+    memcpy(pathInput, sector_pathInput + offset, size);
+    free(sector_pathInput);
 
     return size;
-
 }
 
 /**
@@ -515,11 +505,11 @@ int fat16_getattr(const char *path, struct stat *stbuf)
     return 0;
 }
 
-int fat16_readdir(const char *path, void *buffer, fuse_fill_dir_t filler,
+int fat16_readdir(const char *path, void *pathInput, fuse_fill_dir_t filler,
                   off_t offset, struct fuse_file_info *fi)
 {
     FAT16 *fat16_ins;
-    BYTE sector_buffer[BYTES_PER_SECTOR];
+    BYTE sector_pathInput[BYTES_PER_SECTOR];
     int RootDirCnt = 1, DirSecCnt = 1, i;
 
     /* Gets volume data supplied in the context during the fat16_init function */
@@ -527,16 +517,16 @@ int fat16_readdir(const char *path, void *buffer, fuse_fill_dir_t filler,
     context = fuse_get_context();
     fat16_ins = (FAT16 *)context->private_data;
 
-    sector_read(fat16_ins->fd, fat16_ins->FirstRootDirSecNum, sector_buffer);
+    sector_read(fat16_ins->fd, fat16_ins->FirstRootDirSecNum, sector_pathInput);
 
     if (strcmp(path, "/") == 0)
     {
         DIR_ENTRY Root;
 
-        /* Starts filling the requested directory entries into the buffer */
+        /* Starts filling the requested directory entries into the pathInput */
         for (i = 1; i <= fat16_ins->Bpb.BPB_RootEntCnt; i++)
         {
-            memcpy(&Root, &sector_buffer[((i - 1) * BYTES_PER_DIR) % BYTES_PER_SECTOR], BYTES_PER_DIR);
+            memcpy(&Root, &sector_pathInput[((i - 1) * BYTES_PER_DIR) % BYTES_PER_SECTOR], BYTES_PER_DIR);
 
             /* No more files to fill */
             if (Root.DIR_Name[0] == 0x00)
@@ -544,18 +534,18 @@ int fat16_readdir(const char *path, void *buffer, fuse_fill_dir_t filler,
                 return 0;
             }
 
-            /* If we find a file or a directory, fill it into the buffer */
-            if (Root.DIR_Attr == ATTR_ARCHIVE || Root.DIR_Attr == ATTR_DIRECTORY)
+            /* If we find a file or a directory, fill it into the pathInput */
+            if ((Root.DIR_Attr == ATTR_ARCHIVE || Root.DIR_Attr == ATTR_DIRECTORY) && Root.DIR_Name[0] != 0xe5)
             {
                 const char *filename = (const char *)path_decode(Root.DIR_Name);
-                filler(buffer, filename, NULL, 0);
+                filler(pathInput, filename, NULL, 0);
             }
 
             /* End of bytes for this sector (1 sector == 512 bytes == 16 DIR entries)
              * Read next sector */
             if (i % 16 == 0 && i != fat16_ins->Bpb.BPB_RootEntCnt)
             {
-                sector_read(fat16_ins->fd, fat16_ins->FirstRootDirSecNum + RootDirCnt, sector_buffer);
+                sector_read(fat16_ins->fd, fat16_ins->FirstRootDirSecNum + RootDirCnt, sector_pathInput);
                 RootDirCnt++;
             }
         }
@@ -573,19 +563,19 @@ int fat16_readdir(const char *path, void *buffer, fuse_fill_dir_t filler,
 
         ClusterN = Dir.DIR_FstClusLO;
 
-        first_sector_by_cluster(fat16_ins, ClusterN, &FatClusEntryVal, &FirstSectorofCluster, sector_buffer);
+        first_sector_by_cluster(fat16_ins, ClusterN, &FatClusEntryVal, &FirstSectorofCluster, sector_pathInput);
 
         /* Start searching the root's sub-directories starting from Dir */
         for (i = 1; Dir.DIR_Name[0] != 0x00; i++)
         {
-            memcpy(&Dir, &sector_buffer[((i - 1) * BYTES_PER_DIR) % BYTES_PER_SECTOR], BYTES_PER_DIR);
+            memcpy(&Dir, &sector_pathInput[((i - 1) * BYTES_PER_DIR) % BYTES_PER_SECTOR], BYTES_PER_DIR);
 
             /* If the last file of the path is located in this directory, stop
              * searching */
-            if (Dir.DIR_Attr == ATTR_ARCHIVE || Dir.DIR_Attr == ATTR_DIRECTORY)
+            if ((Dir.DIR_Attr == ATTR_ARCHIVE || Dir.DIR_Attr == ATTR_DIRECTORY) && Dir.DIR_Name[0] != 0xe5)
             {
                 const char *filename = (const char *)path_decode(Dir.DIR_Name);
-                filler(buffer, filename, NULL, 0);
+                filler(pathInput, filename, NULL, 0);
             }
 
             /* End of bytes for this sector (1 sector == 512 bytes == 16 DIR entries) */
@@ -594,7 +584,7 @@ int fat16_readdir(const char *path, void *buffer, fuse_fill_dir_t filler,
                 /* If there are still sector to be read in the cluster, read the next sector. */
                 if (DirSecCnt < fat16_ins->Bpb.BPB_SecPerClus)
                 {
-                    sector_read(fat16_ins->fd, FirstSectorofCluster + DirSecCnt, sector_buffer);
+                    sector_read(fat16_ins->fd, FirstSectorofCluster + DirSecCnt, sector_pathInput);
                     DirSecCnt++;
 
                     /* Else, read the next sector */
@@ -611,7 +601,7 @@ int fat16_readdir(const char *path, void *buffer, fuse_fill_dir_t filler,
                     /* Next cluster */
                     ClusterN = FatClusEntryVal;
 
-                    first_sector_by_cluster(fat16_ins, ClusterN, &FatClusEntryVal, &FirstSectorofCluster, sector_buffer);
+                    first_sector_by_cluster(fat16_ins, ClusterN, &FatClusEntryVal, &FirstSectorofCluster, sector_pathInput);
 
                     i = 0;
                     DirSecCnt = 1;
@@ -625,7 +615,7 @@ int fat16_readdir(const char *path, void *buffer, fuse_fill_dir_t filler,
 }
 
 /* 读文件接口，直接调用read_path实现 */
-int fat16_read(const char *path, char *buffer, size_t size, off_t offset,
+int fat16_read(const char *path, char *pathInput, size_t size, off_t offset,
                struct fuse_file_info *fi)
 {
     FAT16 *fat16_ins;
@@ -633,13 +623,13 @@ int fat16_read(const char *path, char *buffer, size_t size, off_t offset,
     context = fuse_get_context();
     fat16_ins = (FAT16 *)context->private_data;
 
-    return read_path(fat16_ins, path, size, offset, buffer);
+    return read_path(fat16_ins, path, size, offset, pathInput);
 }
 
 /* read_path()调试思路参考，不作为计分标准 */
 void test_read_path()
 {
-    char *buffer;
+    char *pathInput;
     /* 这里使用的文件镜像是fat16_test.img */
     FAT_FILE_NAME = "fat16_test.img";
     FAT16 *fat16_ins = pre_init_fat16();
@@ -654,12 +644,12 @@ void test_read_path()
     for (i = 0; i < sizeof(path) / sizeof(path[0]); i++)
     {
         DIR_ENTRY Dir;
-        buffer = malloc(size[i] * sizeof(char));
+        pathInput = malloc(size[i] * sizeof(char));
         /* 读文件 */
-        read_path(fat16_ins, path[i], size[i], offset[i], buffer);
+        read_path(fat16_ins, path[i], size[i], offset[i], pathInput);
         /* 比较读出的结果 */
-        assert(strncmp(buffer, texts[i], size[i]) == 0);
-        free(buffer);
+        assert(strncmp(pathInput, texts[i], size[i]) == 0);
+        free(pathInput);
         printf("test case %d: OK\n", i + 1);
     }
 
